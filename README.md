@@ -8,7 +8,7 @@ Every frame depends only on time, so the render is the same on every run and the
 
 An experiment is a layout, a set of agents and a prompt, all in one folder:
 
-- [experiments/best-piece](experiments/best-piece): Fable 5.2 and Opus 5.5 vs Sol 6.1 and Astra 6 vs Grok 4.7 and Grok 4.6, one row per provider. [Video](experiments/best-piece/davinci.mp4).
+- [experiments/best-piece](experiments/best-piece): Fable 5.2 and Opus 5.5 vs Sol 6.1 and Astra 6 vs Grok 4.7 and Grok 4.6, one row per provider.
 
 ## Quick start
 

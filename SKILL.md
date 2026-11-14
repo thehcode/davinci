@@ -25,7 +25,7 @@ An experiment = layout + agents + prompt:
 | `experiment.json` | Timing, paper, `layout`, and the painters: name, label, provider, agent CLI, model |
 | `prompt.md` | The task given to every agent. `NAME` = painter name, `EXP` = experiment folder |
 | `painters/<name>.mjs` | One painting. `export default function (b) { ... }` |
-| `davinci.mp4` | The rendered video |
+| `davinci.mp4` | The rendered video (not in git) |
 
 ## Setup
 

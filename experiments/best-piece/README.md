@@ -12,7 +12,7 @@ Top 2 models from 3 providers, one row per provider. Every model got the same
 | xAI | Grok 4.7 | Displacement | A whale rests at the surface with an iceberg on its back |
 | xAI | Grok 4.6 | Actias | A luna moth crosses the moon |
 
-Video: [davinci.mp4](davinci.mp4) (30 s, one loop that ends where it starts).
+Video: `node render.mjs experiments/best-piece` writes `davinci.mp4` here (30 s, one loop that ends where it starts). Outputs are not in git.
 
 ## How this run was made
 
