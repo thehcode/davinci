@@ -2,7 +2,7 @@
   "title": "Best piece: top 2 models from 3 providers",
   "prompt": "prompt.md",
   "duration": 30,
-  "loops": 2,
+  "loops": 1,
   "hold": 4,
   "fade": 1.5,
   "paper": "#f2ead8",

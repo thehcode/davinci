@@ -100,7 +100,7 @@ node render.mjs experiments/<name>                 # <exp>/davinci.mp4 + <exp>/d
 ```
 
 - mp4: H.264 High, yuv420p, 1920x1080, 60fps, `+faststart`. webm: VP9, same size and framerate.
-- Length = `duration` x `loops` (default 30 s x 2 = 60 s).
+- Length = `duration` x `loops` (`best-piece`: 30 s x 1 = 30 s).
 - The loop: paper is blank at t=0. Painters paint, the result holds for `hold` seconds, then fades back to blank over `fade` seconds, so the last frame cuts back to the first.
 
 Check before you publish:
