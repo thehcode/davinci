@@ -1,0 +1,19 @@
+{
+  "title": "Best piece: top 2 models from 3 providers",
+  "prompt": "prompt.md",
+  "duration": 30,
+  "loops": 2,
+  "hold": 4,
+  "fade": 1.5,
+  "paper": "#f2ead8",
+  "aspect": 1,
+  "layout": { "rows": 3, "cols": 2 },
+  "painters": [
+    { "name": "fable",  "label": "Fable 5.2", "provider": "Anthropic", "agent": "claude", "model": "claude-fable-5-2" },
+    { "name": "opus",   "label": "Opus 5.5",  "provider": "Anthropic", "agent": "claude", "model": "claude-opus-5-5" },
+    { "name": "sol",    "label": "Sol 6.1",   "provider": "OpenAI",    "agent": "codex",  "model": "gpt-6.1-sol", "effort": "high" },
+    { "name": "astra",  "label": "Astra 6",   "provider": "OpenAI",    "agent": "codex",  "model": "gpt-6-astra", "effort": "high" },
+    { "name": "grok47", "label": "Grok 4.7",  "provider": "xAI",       "agent": "grok",   "model": "grok-4.7" },
+    { "name": "grok46", "label": "Grok 4.6",  "provider": "xAI",       "agent": "grok",   "model": "grok-4.6" }
+  ]
+}

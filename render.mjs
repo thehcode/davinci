@@ -1,20 +1,22 @@
-// Build out/davinci.html from scene.json + painter scripts, then render it to mp4 + webm.
-// Usage: node render.mjs [--build] [--still t1,t2,...] [--frames N]
-//   --build   write out/davinci.html only (open it to watch live)
-//   --still   write PNGs of the given seconds to stills/
+// Build an experiment's page from experiment.json + painter scripts, then render it to mp4 + webm.
+// Usage: node render.mjs experiments/<name> [--build] [--still t1,t2,...] [--frames N] [--solo <painter>]
+//   --build   write <exp>/out/davinci.html only (open it to watch live)
+//   --still   write PNGs of the given seconds to <exp>/stills/
 //   --frames  render only the first N frames (smoke test)
-//   --solo <name>  one painter (painters/<name>.mjs) alone; page and stills go to work/<name>/,
-//                  so several agents can check their own work at the same time
-//   Final video: no --solo; scene.json lists every painter.
+//   --solo <painter>  one painter alone; page and stills go to <exp>/work/<painter>/,
+//                     so several agents can check their own work at the same time
+//   No flag: <exp>/davinci.mp4 + <exp>/davinci.webm with every painter in the layout.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = join(HERE, 'out');
-mkdirSync(OUT, { recursive: true });
 const args = process.argv.slice(2);
+if (!args[0] || args[0].startsWith('--')) { console.error('usage: node render.mjs experiments/<name> [flags]'); process.exit(1); }
+const EXP = resolve(args[0]);
+const OUT = join(EXP, 'out');
+mkdirSync(OUT, { recursive: true });
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 
 // Seeded RNG, so a painter script gives the same strokes every run.
@@ -75,18 +77,18 @@ function makeBrush(label, aspect) {
 }
 
 const SOLO = opt('--solo');
-const scene = JSON.parse(readFileSync(join(HERE, 'scene.json'), 'utf8'));
-if (SOLO) scene.painters = [{ label: SOLO, file: `painters/${SOLO}.mjs` }];
-const WORK = SOLO ? join(HERE, 'work', SOLO) : HERE;
+const scene = JSON.parse(readFileSync(join(EXP, 'experiment.json'), 'utf8'));
+if (SOLO) { scene.painters = [{ name: SOLO, label: SOLO }]; delete scene.layout; }
+const WORK = SOLO ? join(EXP, 'work', SOLO) : EXP;
 mkdirSync(WORK, { recursive: true });
 const painters = [];
 for (const p of scene.painters) {
   const { b, ops } = makeBrush(p.label, scene.aspect);
-  (await import(pathToFileURL(join(HERE, p.file)).href)).default(b);
+  (await import(pathToFileURL(join(EXP, 'painters', `${p.name}.mjs`)).href)).default(b);
   painters.push({ label: p.label, ops });
   console.log(`${p.label}: ${ops.length} ops`);
 }
-const { painters: _, ...rest } = scene;
+const { painters: _, title: _t, prompt: _p, ...rest } = scene;
 const html = readFileSync(join(HERE, 'davinci.src.html'), 'utf8')
   .replace('/*%%SCENE%%*/null', JSON.stringify({ ...rest, painters }));
 const pagePath = SOLO ? join(WORK, 'page.html') : join(OUT, 'davinci.html');
@@ -114,8 +116,8 @@ if (opt('--still')) {
 
 const total = Math.min(Math.round(dur * loops * FPS), Number(opt('--frames')) || Infinity);
 const ff = outArgs => spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-', ...outArgs], { stdio: ['pipe', 'inherit', 'inherit'] });
-const mp4 = ff(['-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow', '-movflags', '+faststart', join(OUT, 'davinci.mp4')]);
-const webm = ff(['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '28', '-row-mt', '1', '-pix_fmt', 'yuv420p', join(OUT, 'davinci.webm')]);
+const mp4 = ff(['-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow', '-movflags', '+faststart', join(EXP, 'davinci.mp4')]);
+const webm = ff(['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '28', '-row-mt', '1', '-pix_fmt', 'yuv420p', join(EXP, 'davinci.webm')]);
 const write = (p, buf) => new Promise(r => p.stdin.write(buf) ? r() : p.stdin.once('drain', r));
 for (let f = 0; f < total; f++) {
   const buf = await shot(f / FPS);

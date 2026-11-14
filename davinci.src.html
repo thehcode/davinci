@@ -17,10 +17,14 @@ const hash = (a, b) => { let h = Math.imul(a * 374761393 + b * 668265263 | 0, 12
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 
 // Layout: N papers in a row, label under each.
-const N = SCENE.painters.length, G = 56, LBL = 64;
-const pw = Math.floor(Math.min((W - G * (N + 1)) / N, (H - 2 * G - LBL) * SCENE.aspect));
+// Layout: a grid of papers, filled row by row in scene order, label under each.
+// scene.layout = { rows, cols }; the default is one row.
+const N = SCENE.painters.length, ROWS = SCENE.layout?.rows || 1, COLS = SCENE.layout?.cols || Math.ceil(N / ROWS);
+const G = ROWS > 1 ? 28 : 56, LBL = ROWS > 1 ? 40 : 64, FONT = ROWS > 1 ? 24 : 30;
+const pw = Math.floor(Math.min((W - G * (COLS + 1)) / COLS, (H - G * (ROWS + 1) - LBL * ROWS) / ROWS * SCENE.aspect));
 const ph = Math.floor(pw / SCENE.aspect);
-const x0 = Math.floor((W - (N * pw + (N - 1) * G)) / 2), y0 = Math.floor((H - ph - LBL) / 2);
+const x0 = Math.floor((W - (COLS * pw + (COLS - 1) * G)) / 2);
+const y0 = Math.floor((H - (ROWS * (ph + LBL) + (ROWS - 1) * G)) / 2);
 
 // A stroke is a bundle of bristles. Each bristle has its own offset, width, shade, paint load and dry pattern.
 function bristles(o, id) {
@@ -56,7 +60,7 @@ const panels = SCENE.painters.map((pt, n) => {
   for (const o of ops) { o.t0 = LEAD + o.t0 * s; o.d *= s; }
   const surf = document.createElement('canvas'); surf.width = pw; surf.height = ph;
   const g = surf.getContext('2d'); g.lineCap = 'butt';
-  return { label: pt.label, ops, surf, g, x: x0 + n * (pw + G), t: -1, i: 0, k: 0, cur: null };
+  return { label: pt.label, ops, surf, g, x: x0 + (n % COLS) * (pw + G), y: y0 + Math.floor(n / COLS) * (ph + LBL + G), t: -1, i: 0, k: 0, cur: null };
 });
 
 // Canvas grain: a fine weave plus noise, multiplied over the paint.
@@ -132,19 +136,19 @@ function renderAt(t) {
   const fade = clamp((t - (DUR - FADE)) / FADE, 0, 1);
   for (const p of panels) {
     advance(p, t);
-    ctx.fillStyle = PAPER; ctx.fillRect(p.x, y0, pw, ph);
+    ctx.fillStyle = PAPER; ctx.fillRect(p.x, p.y, pw, ph);
     ctx.globalAlpha = 1 - fade * fade * (3 - 2 * fade);
-    ctx.drawImage(p.surf, p.x, y0);
+    ctx.drawImage(p.surf, p.x, p.y);
     ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(grain, p.x, y0); ctx.globalCompositeOperation = 'source-over';
+    ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(grain, p.x, p.y); ctx.globalCompositeOperation = 'source-over';
     if (p.cur) {
       const [cx, cy] = p.cur;
       ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(p.x + cx * pw, y0 + cy * ph, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x + cx * pw, p.y + cy * ph, 9, 0, Math.PI * 2); ctx.stroke();
     }
-    ctx.fillStyle = '#e8e8e8'; ctx.font = '500 30px -apple-system, system-ui, sans-serif';
+    ctx.fillStyle = '#e8e8e8'; ctx.font = `500 ${FONT}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(p.label, p.x + pw / 2, y0 + ph + LBL / 2 + 8);
+    ctx.fillText(p.label, p.x + pw / 2, p.y + ph + LBL / 2 + 8);
   }
 }
 

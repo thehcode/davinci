@@ -3,8 +3,8 @@ their own canvas, live, and viewers watch every stroke appear. Make your best,
 most creative painting. Pick your own subject. Avoid the obvious (sunsets, a lone
 tree, flowers in a vase) unless you do something no one expects with it.
 
-Write ONE file: painters/NAME.mjs
-Edit no other file. Do not read the other files in painters/.
+Write ONE file: EXP/painters/NAME.mjs
+Edit no other file. Do not read the other files in EXP/painters/.
 
   export default function (b) { ... }
 
@@ -32,7 +32,7 @@ direction of strokes, then finish with highlights and accents. Brush direction
 carries form. Choose a limited, deliberate palette. 150-600 ops is a good range.
 
 To look at your work, run this from the repo root:
-  node render.mjs --solo NAME --still 8,16,25
-and open the PNGs in work/NAME/stills/ (t25.00.png is the finished piece).
+  node render.mjs EXP --solo NAME --still 8,16,25
+and open the PNGs in EXP/work/NAME/stills/ (t25.00.png is the finished piece).
 Look at it, judge it honestly, and revise at least twice before you stop.
 Return: the title of the piece, one line on the idea, and the file path.

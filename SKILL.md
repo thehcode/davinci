@@ -1,23 +1,31 @@
 ---
 name: davinci
-description: Run a painting match between AI models. Each model writes a script of bristle-brush strokes; the engine replays every canvas side by side with a label and renders a looping 1920x1080 60fps mp4 + webm. Use when asked to have agents or models paint, compare models visually, or make an "AI vs AI painting" video.
+description: Run a painting match between AI models. Each model writes a script of bristle-brush strokes; the engine replays every canvas in a labelled grid and renders a looping 1920x1080 60fps mp4 + webm. Use when asked to have agents or models paint, compare models visually, or make an "AI vs AI painting" video.
 ---
 
 # davinci
 
 Agents paint by writing code, not by moving a mouse. Each painter is one file of
-stroke commands. The engine replays all painters side by side, deterministically,
+stroke commands. The engine replays all painters in a grid, deterministically,
 so any frame can be rendered at any time and the video loops cleanly.
 
 ## Files
 
 | Path | What it is |
 |---|---|
-| `painters/<name>.mjs` | One painter. `export default function (b) { ... }` |
-| `scene.json` | Timing, paper colour, and the list of painters with labels |
-| `prompt.md` | The task given to each model. Replace `NAME` with the painter name |
-| `davinci.src.html` | Replay engine (Canvas 2D, bristle brush, canvas grain) |
-| `render.mjs` | Builds `out/davinci.html` and renders the video |
+| `davinci.src.html` | Replay engine (Canvas 2D, bristle brush, canvas grain, grid layout) |
+| `render.mjs` | Builds an experiment's page and renders stills or the video |
+| `run.mjs` | Launches every painter agent of an experiment in parallel |
+| `experiments/<name>/` | One experiment: setup, prompt, paintings, video |
+
+An experiment = layout + agents + prompt:
+
+| Path in `experiments/<name>/` | What it is |
+|---|---|
+| `experiment.json` | Timing, paper, `layout`, and the painters: name, label, provider, agent CLI, model |
+| `prompt.md` | The task given to every agent. `NAME` = painter name, `EXP` = experiment folder |
+| `painters/<name>.mjs` | One painting. `export default function (b) { ... }` |
+| `davinci.mp4` | The rendered video |
 
 ## Setup
 
@@ -25,7 +33,8 @@ so any frame can be rendered at any time and the video loops cleanly.
 npm install
 npx playwright install chromium
 ```
-ffmpeg must be on PATH.
+ffmpeg must be on PATH. For `run.mjs`, install and sign in to each agent CLI you use:
+`claude`, `codex`, `grok`.
 
 ## Brush API
 
@@ -41,54 +50,65 @@ b.pause(seconds)
 b.rng()                                                    // seeded; never use Math.random
 ```
 
-## Run a match
+## Run an experiment
 
-1. Pick the painter names, for example `fable`, `opus`, `astra`, `sol`.
+1. Copy `experiments/best-piece/` to `experiments/<new>/`. Delete its `painters/*.mjs` and `davinci.mp4`.
 
-2. Give each model `prompt.md` with `NAME` replaced, and run it in this folder.
-   The models can run in parallel: `--solo` mode gives each one its own
-   `work/<name>/` folder, so they never overwrite each other's stills.
+2. Edit `experiment.json`: one entry per painter. `agent` is `claude`, `codex` or
+   `grok`; `model` is that CLI's model id; `effort` is optional (codex only).
 
-   ```
-   P="$(sed s/NAME/opus/g prompt.md)"
-   claude -p "$P" --model claude-opus-5-5 --allowedTools "Read" "Write" "Edit" "Bash(node render.mjs:*)"
-   codex exec --skip-git-repo-check -m gpt-6.1-sol --sandbox workspace-write -C . "$P" < /dev/null
-   grok -p "$P" -m <grok-model> --always-approve --cwd .
-   ```
-
-3. Each model checks its own work with:
-   ```
-   node render.mjs --solo <name> --still 8,16,25    # PNGs in work/<name>/stills/
-   ```
-
-4. List every painter in `scene.json`:
    ```json
-   { "label": "Opus 5.5", "file": "painters/opus.mjs" }
+   { "name": "opus", "label": "Opus 5.5", "provider": "Anthropic", "agent": "claude", "model": "claude-opus-5-5" }
    ```
+
+3. Edit `prompt.md` if you want a different task.
+
+4. Launch the agents:
+   ```
+   node run.mjs experiments/<new>                 # all painters, in parallel
+   node run.mjs experiments/<new> --only grok47   # one painter
+   ```
+   Each agent may write only its own painter file and run `render.mjs`. Logs go to
+   `experiments/<new>/work/<name>/agent.log`. Each agent checks its own work with
+   `node render.mjs experiments/<new> --solo <name> --still 8,16,25`, so agents in
+   parallel never overwrite each other's stills.
+
+To add a CLI, add one entry to `AGENTS` in `run.mjs`.
+
+## Layout
+
+Canvases fill the grid row by row, in the order of `painters`. Without `layout`,
+all canvases sit in one row.
+
+```json
+"layout": { "rows": 3, "cols": 2 }
+```
+
+Canvas size at 1920x1080: one row of 4 is about 410 px; a 3x2 grid is about 280 px.
 
 ## Add a painter later
 
-Run step 2 for the new model, then add one line to `scene.json` and render again.
-You do not change the other painters. Their strokes replay the same way every time.
+Add its entry to `experiment.json`, run `node run.mjs experiments/<name> --only <painter>`,
+and render again. The other paintings replay unchanged.
 
 ## Make the video
 
 ```
-node render.mjs --still 12,25     # check the 4-panel frames first: stills/
-node render.mjs --build           # out/davinci.html, open it to watch live
-node render.mjs                   # out/davinci.mp4 + out/davinci.webm
+node render.mjs experiments/<name> --still 12,25   # check frames first: <exp>/stills/
+node render.mjs experiments/<name> --build         # <exp>/out/davinci.html, open it to watch live
+node render.mjs experiments/<name>                 # <exp>/davinci.mp4 + <exp>/davinci.webm
 ```
 
 - mp4: H.264 High, yuv420p, 1920x1080, 60fps, `+faststart`. webm: VP9, same size and framerate.
-- Length = `duration` x `loops` from `scene.json` (default 30 s x 2 = 60 s).
+- Length = `duration` x `loops` (default 30 s x 2 = 60 s).
 - The loop: paper is blank at t=0. Painters paint, the result holds for `hold` seconds, then fades back to blank over `fade` seconds, so the last frame cuts back to the first.
 
 Check before you publish:
 ```
-ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration out/davinci.mp4
+ffprobe -v error -show_entries stream=width,height,r_frame_rate -show_entries format=duration experiments/<name>/davinci.mp4
 ```
 
 ## Limits
 
-- Layout is one row. With 4 painters each canvas is about 410 px wide; with more painters each canvas gets smaller.
-- An open prompt ("be creative") makes many models choose the same kind of subject. Give each model a theme if you want variety.
+- More rows or columns make each canvas smaller. Tell the painters the real canvas size in `prompt.md`.
+- An open prompt ("be creative") makes many models choose the same kind of subject. In `best-piece`, 4 of 6 painted a whale. Give each model a theme if you want variety.
