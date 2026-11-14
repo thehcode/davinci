@@ -1,0 +1,158 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>davinci</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh;object-fit:contain}
+</style></head><body><canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// Replay engine. SCENE is injected by render.mjs: { duration, hold, fade, paper, aspect, painters:[{label, ops}] }.
+// Every frame is a pure function of t, so any frame can be rendered in any order.
+const SCENE = /*%%SCENE%%*/null;
+const W = 1920, H = 1080, cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const { duration: DUR, hold: HOLD, fade: FADE, paper: PAPER } = SCENE;
+const LEAD = 0.5, PAINT = DUR - HOLD - FADE - LEAD;
+// Integer hash -> [0,1). Seeds every bristle, so replays are identical.
+const hash = (a, b) => { let h = Math.imul(a * 374761393 + b * 668265263 | 0, 1274126177); h ^= h >>> 13; h = Math.imul(h, 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+
+// Layout: N papers in a row, label under each.
+const N = SCENE.painters.length, G = 56, LBL = 64;
+const pw = Math.floor(Math.min((W - G * (N + 1)) / N, (H - 2 * G - LBL) * SCENE.aspect));
+const ph = Math.floor(pw / SCENE.aspect);
+const x0 = Math.floor((W - (N * pw + (N - 1) * G)) / 2), y0 = Math.floor((H - ph - LBL) / 2);
+
+// A stroke is a bundle of bristles. Each bristle has its own offset, width, shade, paint load and dry pattern.
+function bristles(o, id) {
+  const rpx = o.size * pw / 2, K = clamp(Math.round(rpx / 1.4), 6, 44), [r, g, b] = rgb(o.color);
+  return Array.from({ length: K }, (_, j) => {
+    const h = q => hash(id, j * 8 + q), sh = 1 + (h(0) - 0.5) * 0.34 + (h(1) < 0.12 ? 0.18 : 0);
+    const off = (K > 1 ? j / (K - 1) * 2 - 1 : 0) + (h(2) - 0.5) * 1.6 / K;
+    return {
+      off, w: (2 * rpx / K) * (0.9 + h(3) * 1.4) * (1 - 0.45 * Math.abs(off)),
+      c: `rgb(${[r, g, b].map(v => clamp(Math.round(v * sh), 0, 255))})`,
+      load: (0.55 + 0.45 * h(4)) * (1 - 0.35 * Math.abs(off) ** 3), ph: h(5) * 100, fq: 0.6 + h(6) * 1.2, a: h(7), z: hash(id, j * 8 + 9),
+    };
+  });
+}
+
+// Timeline: stroke time = length / speed, then each painter is scaled to finish at the same time.
+const panels = SCENE.painters.map((pt, n) => {
+  let t = 0;
+  const ops = pt.ops.map((o, i) => {
+    const op = { ...o };
+    if (o.k === 's') {
+      const c = [0];
+      for (let i = 1; i < o.pts.length; i++) {
+        const [ax, ay] = o.pts[i - 1], [bx, by] = o.pts[i];
+        c.push(c[i - 1] + Math.hypot(bx - ax, (by - ay) / SCENE.aspect));
+      }
+      op.cum = c; op.L = c[c.length - 1]; op.d = op.L / (o.speed || 0.9) + 0.05;
+      op.br = bristles(o, n * 100003 + i); op.sp = Math.max(0.0015, o.size * 0.18);
+    } else op.d = o.d;
+    op.t0 = t; t += op.d; return op;
+  });
+  const s = t > 0 ? PAINT / t : 1;
+  for (const o of ops) { o.t0 = LEAD + o.t0 * s; o.d *= s; }
+  const surf = document.createElement('canvas'); surf.width = pw; surf.height = ph;
+  const g = surf.getContext('2d'); g.lineCap = 'butt';
+  return { label: pt.label, ops, surf, g, x: x0 + n * (pw + G), t: -1, i: 0, k: 0, cur: null };
+});
+
+// Canvas grain: a fine weave plus noise, multiplied over the paint.
+const grain = document.createElement('canvas'); grain.width = pw; grain.height = ph;
+{
+  const gc = grain.getContext('2d'), im = gc.createImageData(pw, ph);
+  for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+    const v = 232 + 14 * Math.sin(x * 1.9) * Math.sin(y * 1.9) + 18 * (hash(x, y) - 0.5) + 10 * Math.sin(x * 0.05 + Math.sin(y * 0.07) * 3) * 0.3;
+    const k = (y * pw + x) * 4; im.data[k] = im.data[k + 1] = im.data[k + 2] = clamp(v, 0, 255); im.data[k + 3] = 255;
+  }
+  gc.putImageData(im, 0, 0);
+}
+
+function pointAt(o, s) {
+  s = clamp(s, 0, o.L);
+  const c = o.cum; let lo = 0, hi = c.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= s) lo = m; else hi = m; }
+  const a = o.pts[lo], b = o.pts[hi] || a, f = c[hi] > c[lo] ? (s - c[lo]) / (c[hi] - c[lo]) : 0;
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+// Bristle tips at arc length s: centre + normal * offset * radius, with tapered ends.
+function frame(o, s) {
+  const p = pointAt(o, s), e = Math.max(o.sp, 0.002), a = pointAt(o, s - e), b = pointAt(o, s + e);
+  let nx = -(b[1] - a[1]) * ph, ny = (b[0] - a[0]) * pw; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+  const tl = o.size * 1.2, taper = Math.min(1, 0.12 + 0.88 * s / tl, 0.12 + 0.88 * (o.L - s) / tl);
+  return { x: p[0] * pw, y: p[1] * ph, nx, ny, r: o.size * pw / 2 * p[2] * taper };
+}
+// Draw one step of a stroke, from arc length s0 to s1.
+function segment(p, o, s0, s1) {
+  const A = frame(o, s0), B = frame(o, s1), g = p.g, dep = s1 / Math.max(o.L, 1e-6);
+  if (o.clip) {
+    g.save(); g.beginPath();
+    o.clip.forEach(([x, y], i) => i ? g.lineTo(x * pw, y * ph) : g.moveTo(x * pw, y * ph));
+    g.closePath(); g.clip();
+  }
+  const rag = Math.min(o.size * 0.6, o.L * 0.3);
+  for (const br of o.br) {
+    if (s1 < br.a * rag || s0 > o.L - br.z * rag) continue;
+    const u = s1 / o.size * br.fq + br.ph, dry = Math.sin(u) + 0.6 * Math.sin(u * 2.3 + br.ph);
+    if (dry < -1.6 + 2.2 * dep * (o.dry ?? 0.5) * (1.2 - br.load)) continue;
+    g.globalAlpha = o.alpha * br.load * (1 - 0.45 * dep * (o.dry ?? 0.5)) * 0.85;
+    g.strokeStyle = br.c; g.lineWidth = Math.max(0.6, br.w * (0.6 + 0.4 * B.r / (o.size * pw / 2)));
+    g.beginPath();
+    g.moveTo(A.x + A.nx * br.off * A.r, A.y + A.ny * br.off * A.r);
+    g.lineTo(B.x + B.nx * br.off * B.r, B.y + B.ny * br.off * B.r);
+    g.stroke();
+  }
+  if (o.clip) g.restore();
+}
+function reset(p) { p.g.globalAlpha = 1; p.g.clearRect(0, 0, pw, ph); p.i = 0; p.k = 0; }
+
+// Advance a panel to time t. Moving forward draws only the new part; moving back replays from blank.
+function advance(p, t) {
+  if (t < p.t) reset(p);
+  p.t = t; p.cur = null;
+  while (p.i < p.ops.length) {
+    const o = p.ops[p.i], f = clamp((t - o.t0) / o.d, 0, 1);
+    if (f <= 0) break;
+    if (o.k === 's') {
+      const target = o.L * f;
+      while ((p.k + 1) * o.sp <= target) { segment(p, o, p.k * o.sp, (p.k + 1) * o.sp); p.k++; }
+      if (f === 1 && p.k * o.sp < o.L) segment(p, o, p.k * o.sp, o.L);
+      if (f < 1) p.cur = pointAt(o, target);
+    }
+    if (f < 1) break;
+    p.i++; p.k = 0;
+  }
+}
+
+function renderAt(t) {
+  t = ((t % DUR) + DUR) % DUR;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const fade = clamp((t - (DUR - FADE)) / FADE, 0, 1);
+  for (const p of panels) {
+    advance(p, t);
+    ctx.fillStyle = PAPER; ctx.fillRect(p.x, y0, pw, ph);
+    ctx.globalAlpha = 1 - fade * fade * (3 - 2 * fade);
+    ctx.drawImage(p.surf, p.x, y0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(grain, p.x, y0); ctx.globalCompositeOperation = 'source-over';
+    if (p.cur) {
+      const [cx, cy] = p.cur;
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x + cx * pw, y0 + cy * ph, 9, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = '#e8e8e8'; ctx.font = '500 30px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.label, p.x + pw / 2, y0 + ph + LBL / 2 + 8);
+  }
+}
+
+if (new URLSearchParams(location.search).has('capture')) {
+  renderAt(0);
+  window.davinciCapture = { duration: DUR, loops: SCENE.loops || 1, renderAt, ready: true };
+} else {
+  const t0 = performance.now();
+  (function tick(now) { renderAt((now - t0) / 1000); requestAnimationFrame(tick); })(t0);
+}
+</script></body></html>

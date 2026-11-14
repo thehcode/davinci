@@ -1,0 +1,8 @@
+{
+  "name": "davinci",
+  "private": true,
+  "type": "module",
+  "description": "Scriptable, replayable bristle-brush painting for AI agents, rendered to a looping video.",
+  "scripts": { "render": "node render.mjs" },
+  "dependencies": { "playwright": "1.61.1" }
+}
