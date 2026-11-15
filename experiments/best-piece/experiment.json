@@ -1,5 +1,6 @@
 {
   "title": "Best piece: top 2 models from 3 providers",
+  "brand": "@hshipit",
   "prompt": "prompt.md",
   "duration": 30,
   "loops": 1,

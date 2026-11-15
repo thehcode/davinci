@@ -150,6 +150,19 @@ function renderAt(t) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(p.label, p.x + pw / 2, p.y + ph + LBL / 2 + 8);
   }
+  drawBrand();
+}
+
+// Branding, top right: X logo + handle from scene.brand (omit it for no branding).
+const BRAND = SCENE.brand, XLOGO = new Path2D('M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z');
+function drawBrand() {
+  if (!BRAND) return;
+  ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = '#e8e8e8';
+  ctx.font = '600 28px -apple-system, system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const x = W - 40, y = 48, tw = ctx.measureText(BRAND).width, s = 24 / 1227;
+  ctx.fillText(BRAND, x, y);
+  ctx.translate(x - tw - 14 - 1200 * s, y - 12); ctx.scale(s, s); ctx.fill(XLOGO);
+  ctx.restore();
 }
 
 if (new URLSearchParams(location.search).has('capture')) {
