@@ -22,7 +22,7 @@ An experiment = layout + agents + prompt:
 
 | Path in `experiments/<name>/` | What it is |
 |---|---|
-| `experiment.json` | Timing, paper, `layout`, optional `brand` (X logo + handle, top right), and the painters: name, label, provider, agent CLI, model |
+| `experiment.json` | Timing, paper, `layout`, optional `brand` (text, top right), and the painters: name, label, provider, agent CLI, model |
 | `prompt.md` | The task given to every agent. `NAME` = painter name, `EXP` = experiment folder |
 | `painters/<name>.mjs` | One painting. `export default function (b) { ... }` |
 | `davinci.mp4` | The rendered video (not in git) |
